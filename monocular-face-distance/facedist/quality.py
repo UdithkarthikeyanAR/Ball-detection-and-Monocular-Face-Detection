@@ -41,14 +41,33 @@ import numpy as np
 
 __all__ = ["QualityReport", "QualityMonitor"]
 
-#: Reprojection RMS, as a fraction of face span, at which detection scores 0.
-DETECTION_TOLERANCE = 0.040
-#: Relative disagreement between the two depth cues at which cue_match scores 0.
-CUE_TOLERANCE = 0.150
-#: Depth dispersion, as a fraction of depth, at which stability scores 0.
-STABILITY_TOLERANCE = 0.030
-#: Frontality below which pose scores 0 (cos 60deg).
-POSE_FLOOR = 0.500
+# Thresholds below are calibrated against *measured achievable* performance,
+# not against perfection. That distinction matters: a generic anthropometric
+# face model can never reproject onto a specific individual's landmarks
+# exactly, so scoring against a zero-residual ideal caps the detection term at
+# ~59% no matter how well the system is working. A confidence figure that
+# cannot exceed 59% when everything is correct is mis-scaled, and an operator
+# rightly stops trusting it.
+#
+# Each pair below is (value that should score ~1.0, value that should score 0):
+# the first is what the system actually achieves under good conditions on
+# simulated subjects with realistic 3 mm shape variation and 1.5 px landmark
+# noise; the second is where the measurement genuinely stops being usable.
+
+#: Reprojection RMS as a fraction of face span. 1.5% is a good real fit.
+DETECTION_GOOD, DETECTION_BAD = 0.015, 0.060
+#: Disagreement between the two independent depth cues. ~4% is the floor
+#: imposed by using a population-mean face model rather than the subject's own.
+CUE_GOOD, CUE_BAD = 0.040, 0.150
+#: Depth dispersion as a fraction of depth.
+STABILITY_GOOD, STABILITY_BAD = 0.004, 0.030
+#: Frontality (cos yaw * cos pitch). Benchmarked depth error is FLAT from 0 to
+#: 50 degrees of yaw -- 27-36 mm MAE throughout -- because PnP solves for
+#: rotation explicitly rather than assuming a frontal face. The old floor of
+#: cos(60) punished rotation that costs no accuracy, which contradicted the
+#: system's own measured behaviour. It now only bites past ~65 degrees, where
+#: landmarks genuinely start self-occluding.
+POSE_FLOOR = 0.260
 
 WEIGHTS = {
     "detection": 0.30,
@@ -58,11 +77,16 @@ WEIGHTS = {
 }
 
 
-def _score(value: float, tolerance: float) -> float:
-    """Map an error in [0, tolerance] to a score in [1, 0], clipped."""
-    if not math.isfinite(value) or tolerance <= 0.0:
+def _score(value: float, good: float, bad: float) -> float:
+    """Map an error onto [1, 0], where `good` scores 1.0 and `bad` scores 0.
+
+    Two-point rather than linear-to-zero, so that "as good as this system
+    gets" reads as full marks instead of as a fraction of an unreachable
+    ideal.
+    """
+    if not math.isfinite(value) or bad <= good:
         return 0.0
-    return float(np.clip(1.0 - value / tolerance, 0.0, 1.0))
+    return float(np.clip((bad - value) / (bad - good), 0.0, 1.0))
 
 
 @dataclass
@@ -131,14 +155,15 @@ class QualityMonitor:
         # -- detection ------------------------------------------------------
         detection = None
         if face_span_px > 1.0 and math.isfinite(reproj_rms_px):
-            detection = _score(reproj_rms_px / face_span_px, DETECTION_TOLERANCE)
+            detection = _score(reproj_rms_px / face_span_px,
+                               DETECTION_GOOD, DETECTION_BAD)
 
         # -- cue agreement --------------------------------------------------
         cue_match = None
         if (pnp_distance_mm and ipd_distance_mm
                 and pnp_distance_mm > 1.0 and ipd_distance_mm > 1.0):
             rel = abs(pnp_distance_mm - ipd_distance_mm) / pnp_distance_mm
-            cue_match = _score(rel, CUE_TOLERANCE)
+            cue_match = _score(rel, CUE_GOOD, CUE_BAD)
 
         # -- stability ------------------------------------------------------
         stability, stability_cm = None, 0.0
@@ -148,7 +173,8 @@ class QualityMonitor:
             stability_cm = spread / 10.0
             mean = float(np.mean(arr))
             if mean > 1.0:
-                stability = _score(spread / mean, STABILITY_TOLERANCE)
+                stability = _score(spread / mean,
+                                   STABILITY_GOOD, STABILITY_BAD)
 
         # -- pose / conditioning --------------------------------------------
         frontality = (math.cos(math.radians(yaw_deg))
@@ -199,7 +225,7 @@ class QualityMonitor:
     @staticmethod
     def _hints(yaw_deg, pitch_deg, cue_match, detection) -> list[str]:
         hints: list[str] = []
-        if abs(yaw_deg) > 22.0:
+        if abs(yaw_deg) > 45.0:
             hints.append("Turn forward")
         if pitch_deg > 18.0:
             hints.append("Lower your chin")

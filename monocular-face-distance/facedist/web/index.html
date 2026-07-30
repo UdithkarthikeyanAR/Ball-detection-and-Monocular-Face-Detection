@@ -5,144 +5,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>facedist — monocular range &amp; bearing</title>
 <style>
-/* ── tokens ──────────────────────────────────────────────────────────────
-   An optical instrument, not a web dashboard. Deep blue-black like a scope
-   screen; phosphor teal is reserved exclusively for *our* measurement; slate
-   is reserved exclusively for the spec baseline, so the eye learns the two
-   traces without reading a legend. Amber means "systematically wrong",
-   never "noisy".                                                          */
+/* ── palette ──────────────────────────────────────────────────────────────
+   Warm indigo ground, apricot as the single hero accent, coral reserved for
+   states the operator must act on. The rule that keeps a four-colour palette
+   legible: apricot means *our measurement*, lavender means *the spec
+   baseline*, coral means *something needs attention*. Nothing is tinted
+   merely to look alive, so the accent still carries meaning after an hour.
+                                                                           */
 :root{
-  --ink:#0B0E14; --panel:#131823; --panel-2:#0F141E;
-  --rule:#232B3A; --rule-soft:#1A202C;
-  --phos:#7FD4C1; --phos-dim:#3E6D63;
-  --amber:#E8A33D; --slate:#6B7A99; --hot:#FF6B5A;
-  --text:#E4E9F2; --muted:#8794AB; --faint:#5A667E;
+  --ink:#2A2547; --bg:#312C51; --panel:#3B3560; --raised:#48426D;
+  --border:#544D7D; --border-soft:#453F6B;
+  --sand:#F0C38E; --sand-wash:rgba(240,195,142,.12);
+  --coral:#F1AA9B; --coral-deep:#E4867A;
+  --text:#F2EFF9; --muted:#B0A8CE; --faint:#8981AE;
   --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
-  --sans:ui-sans-serif,-apple-system,"Segoe UI",Inter,system-ui,sans-serif;
+  --sans:Inter,ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+  --r:18px; --r-sm:13px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{
-  background:var(--ink); color:var(--text); font-family:var(--sans);
-  font-size:14px; -webkit-font-smoothing:antialiased;
-  display:flex; flex-direction:column; overflow:hidden;
-}
-/* Every live numeral is tabular: at 30 Hz, proportional digits make the
-   readout shimmer as glyph widths change. This is legibility, not style. */
-.num{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:-.01em}
-.lbl{
-  font-size:10px; text-transform:uppercase; letter-spacing:.14em;
-  color:var(--faint); font-weight:600;
-}
-
-/* ── header ─────────────────────────────────────────────────────────── */
-header{
-  display:flex; align-items:center; gap:18px;
-  padding:14px 20px; border-bottom:1px solid var(--rule); flex:none;
-}
-.wordmark{font-family:var(--mono); font-size:19px; font-weight:700; letter-spacing:-.02em}
-.wordmark span{color:var(--phos)}
-.tagline{color:var(--muted); font-size:12px}
+body{background:var(--ink); color:var(--text); font-family:var(--sans);
+  font-size:13px; -webkit-font-smoothing:antialiased; letter-spacing:-.005em;
+  display:flex; flex-direction:column; overflow:hidden;}
+/* Live numerals are tabular: at 30 Hz, proportional digits make a readout
+   shimmer as glyph widths change. Legibility, not decoration. */
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:-.025em}
+.lbl{font-size:10.5px; color:var(--faint); font-weight:600; letter-spacing:.04em;
+     text-transform:uppercase}
+header{display:flex; align-items:center; gap:14px; padding:12px 18px; flex:none}
+.wordmark{font-size:15px; font-weight:700; letter-spacing:-.02em}
+.wordmark span{color:var(--sand)}
+.tagline{color:var(--faint); font-size:11.5px; margin-top:1px}
 .spacer{flex:1}
-.chip{
-  font-family:var(--mono); font-size:11px; padding:5px 10px;
-  border:1px solid var(--rule); border-radius:5px; color:var(--muted);
-  display:flex; gap:7px; align-items:center; white-space:nowrap;
-}
-.chip.warn{border-color:#5A4420; color:var(--amber); background:#1C1508}
-.chip.good{border-color:var(--phos-dim); color:var(--phos)}
-.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
-
-/* ── layout ─────────────────────────────────────────────────────────── */
-main{flex:1; display:grid; grid-template-columns:1fr 348px; gap:14px; padding:14px; min-height:0}
-.stage{
-  position:relative; background:#000; border:1px solid var(--rule);
-  border-radius:8px; overflow:hidden; display:flex; align-items:center;
-  justify-content:center; min-height:0;
-}
+.chip{font-size:11px; padding:6px 12px; border-radius:999px; color:var(--muted);
+      background:var(--panel); display:flex; gap:7px; align-items:center;
+      white-space:nowrap; font-weight:500}
+.chip.warn{color:var(--ink); background:var(--coral); font-weight:600}
+.chip.good{color:var(--ink); background:var(--sand); font-weight:600}
+.dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+main{flex:1; display:grid; grid-template-columns:1fr 360px; gap:12px;
+     padding:0 18px 12px; min-height:0}
+.stage{position:relative; background:#000; border-radius:var(--r); overflow:hidden;
+       display:flex; align-items:center; justify-content:center; min-height:0}
 .stage img{width:100%; height:100%; object-fit:contain; display:block}
-.stage .empty{position:absolute; color:var(--faint); font-family:var(--mono); font-size:13px}
-aside{display:flex; flex-direction:column; gap:10px; overflow-y:auto; min-height:0}
-.card{background:var(--panel); border:1px solid var(--rule); border-radius:8px; padding:13px 14px}
-.card.tight{padding:11px 14px}
-
-/* ── status ─────────────────────────────────────────────────────────── */
-.status{display:flex; gap:10px; align-items:flex-start}
-.status .beacon{width:9px;height:9px;border-radius:50%;margin-top:4px;flex:none}
-.status h2{margin:0; font-size:16px; font-weight:650; letter-spacing:-.01em}
-.status p{margin:2px 0 0; font-size:12px; color:var(--muted); line-height:1.35}
-.s-stable .beacon{background:var(--phos); box-shadow:0 0 9px var(--phos)}
-.s-stable h2{color:var(--phos)}
-.s-settling .beacon{background:var(--amber); box-shadow:0 0 9px var(--amber)}
-.s-settling h2{color:var(--amber)}
-.s-low .beacon{background:var(--hot); box-shadow:0 0 9px var(--hot)}
-.s-low h2{color:var(--hot)}
-
-/* ── primary readouts ───────────────────────────────────────────────── */
-.readout .top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px}
-.big{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:44px;
-     font-weight:700; line-height:1; letter-spacing:-.035em; color:var(--phos)}
-.big .unit{font-size:17px; color:var(--muted); font-weight:500; margin-left:5px; letter-spacing:0}
-.tol{font-size:11.5px; color:var(--phos-dim); margin-top:6px}
-
-/* Comparison row — the whole argument of the project, in one line. */
-.versus{
-  display:flex; justify-content:space-between; align-items:center;
-  margin-top:11px; padding-top:10px; border-top:1px dashed var(--rule-soft);
-  font-size:12px;
-}
-.versus .k{color:var(--slate); font-size:10px; text-transform:uppercase; letter-spacing:.12em}
-.versus .v{font-family:var(--mono); color:var(--slate); font-variant-numeric:tabular-nums}
-.versus .d{font-family:var(--mono); color:var(--amber); font-variant-numeric:tabular-nums}
-
-/* ── bearing gauge ──────────────────────────────────────────────────── */
-.bearing{display:flex; gap:14px; align-items:center}
-.bearing canvas{flex:none}
-.bearing .vals{flex:1; min-width:0}
-.theta{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:30px;
-       font-weight:700; line-height:1; letter-spacing:-.03em}
-.side{font-size:10px; letter-spacing:.16em; font-weight:700; margin-left:7px; vertical-align:middle}
-.sub{font-size:11px; color:var(--muted); margin-top:6px; font-family:var(--mono)}
-
-/* ── quality ────────────────────────────────────────────────────────── */
-.qhead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px}
-.qpct{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:17px; font-weight:700}
-.bar{height:4px; background:var(--rule-soft); border-radius:2px; overflow:hidden}
-.bar>i{display:block; height:100%; background:var(--phos); border-radius:2px;
-       transition:width .22s ease, background .22s ease}
-.subs{display:grid; grid-template-columns:1fr 1fr; gap:7px 14px; margin-top:11px}
-.sub-row{display:flex; justify-content:space-between; font-size:11.5px}
-.sub-row b{font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums}
-.hints{margin-top:10px; display:flex; flex-wrap:wrap; gap:6px}
-.hint{font-size:10.5px; padding:3px 8px; border-radius:4px;
-      background:#1C1508; color:var(--amber); border:1px solid #5A4420}
-
-/* ── chart ──────────────────────────────────────────────────────────── */
-.chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px}
-.legend{display:flex; gap:12px; font-size:10.5px; color:var(--muted)}
-.legend i{display:inline-block; width:14px; height:2px; margin-right:5px; vertical-align:middle}
-canvas.trace{width:100%; height:104px; display:block}
-
-/* ── control rail ───────────────────────────────────────────────────── */
-footer{
-  flex:none; display:flex; gap:8px; align-items:center;
-  padding:11px 20px; border-top:1px solid var(--rule); flex-wrap:wrap;
-}
-button{
-  font-family:var(--sans); font-size:12px; font-weight:600; color:var(--text);
-  background:var(--panel-2); border:1px solid var(--rule); border-radius:6px;
-  padding:8px 13px; cursor:pointer; display:flex; gap:8px; align-items:center;
-  transition:border-color .14s, background .14s;
-}
-button:hover{border-color:var(--phos-dim); background:#161C28}
-button:focus-visible{outline:2px solid var(--phos); outline-offset:2px}
-button.on{border-color:var(--phos-dim); color:var(--phos); background:#101A18}
-kbd{
-  font-family:var(--mono); font-size:9.5px; color:var(--faint);
-  border:1px solid var(--rule); border-radius:3px; padding:1px 4px;
-}
+.stage .empty{position:absolute; color:var(--faint); font-family:var(--mono); font-size:12px}
+aside{display:flex; flex-direction:column; gap:11px; overflow-y:auto; min-height:0; padding-right:2px}
+aside::-webkit-scrollbar{width:6px}
+aside::-webkit-scrollbar-thumb{background:var(--raised); border-radius:3px}
+.card{background:var(--panel); border-radius:var(--r); padding:15px 16px}
+.status{display:flex; gap:10px; align-items:center; padding:11px 16px;
+        background:var(--panel); border-radius:999px}
+.status .beacon{width:8px;height:8px;border-radius:50%;flex:none}
+.status h2{margin:0; font-size:13px; font-weight:650; letter-spacing:-.01em}
+.status p{margin:0; font-size:11px; color:var(--faint); line-height:1.3}
+.s-stable .beacon{background:var(--sand)}    .s-stable h2{color:var(--sand)}
+.s-settling .beacon{background:var(--coral)} .s-settling h2{color:var(--coral)}
+.s-low .beacon{background:var(--coral-deep)} .s-low h2{color:var(--coral-deep)}
+.hero{background:var(--sand); color:var(--ink); border-radius:var(--r); padding:17px 18px 15px}
+.hero .top{display:flex; justify-content:space-between; align-items:center}
+.hero .lbl{color:rgba(42,37,71,.62)}
+.hero .mode{font-size:10px; font-weight:700; text-transform:uppercase;
+            letter-spacing:.06em; color:rgba(42,37,71,.55)}
+.big{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:46px;
+     font-weight:700; line-height:1.05; letter-spacing:-.05em; margin-top:6px}
+.big .unit{font-size:16px; font-weight:600; margin-left:6px; letter-spacing:0;
+           color:rgba(42,37,71,.6)}
+.tol{font-size:11.5px; color:rgba(42,37,71,.66); font-family:var(--mono); margin-top:3px}
+.versus{display:flex; justify-content:space-between; align-items:center; margin-top:13px;
+        padding:9px 12px; border-radius:var(--r-sm); background:rgba(42,37,71,.11);
+        font-size:11.5px}
+.versus .k{color:rgba(42,37,71,.62); font-weight:500}
+.versus .v{font-family:var(--mono); font-variant-numeric:tabular-nums; color:rgba(42,37,71,.78)}
+.versus .d{font-family:var(--mono); font-weight:700; margin-left:7px}
+.duo{display:grid; grid-template-columns:1fr 1fr; gap:11px}
+.duo .card{padding:14px; display:flex; flex-direction:column; align-items:flex-start}
+.theta{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:25px;
+       font-weight:700; line-height:1; letter-spacing:-.04em; color:var(--sand); margin-top:8px}
+.side{display:inline-block; font-size:9px; letter-spacing:.08em; font-weight:700;
+      padding:3px 8px; border-radius:999px; background:var(--sand-wash);
+      color:var(--sand); margin-top:8px}
+.sub{font-size:10.5px; color:var(--faint); margin-top:8px; font-family:var(--mono)}
+.gaugewrap{align-self:center; margin-top:2px}
+.ringwrap{position:relative; align-self:center; margin-top:2px}
+.ringwrap .mid{position:absolute; inset:0; display:flex; flex-direction:column;
+               align-items:center; justify-content:center}
+.ringwrap .pct{font-family:var(--mono); font-variant-numeric:tabular-nums;
+               font-size:19px; font-weight:700; letter-spacing:-.03em}
+.ringwrap .cap{font-size:8.5px; color:var(--faint); text-transform:uppercase;
+               letter-spacing:.07em; margin-top:1px}
+.subs{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px}
+.sub-row{display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted)}
+.sub-row b{font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums; color:var(--text)}
+.hints{margin-top:12px; display:flex; flex-wrap:wrap; gap:6px}
+.hint{font-size:10.5px; padding:4px 9px; border-radius:999px; background:var(--coral);
+      color:var(--ink); font-weight:600}
+.chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:11px}
+.legend{display:flex; gap:12px; font-size:10.5px; color:var(--faint)}
+.legend i{display:inline-block; width:13px; height:2.5px; margin-right:5px;
+          vertical-align:middle; border-radius:2px}
+canvas.trace{width:100%; height:96px; display:block}
+.spec .grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; margin-top:10px;
+            font-family:var(--mono); font-size:10.5px; color:var(--faint)}
+.spec .grid b{color:var(--text); font-weight:600}
+footer{flex:none; display:flex; gap:8px; align-items:center; padding:0 18px 14px; flex-wrap:wrap}
+button{font-family:var(--sans); font-size:11.5px; font-weight:600; color:var(--muted);
+       background:var(--panel); border:0; border-radius:999px; padding:9px 15px;
+       cursor:pointer; display:flex; gap:8px; align-items:center;
+       transition:background .14s, color .14s}
+button:hover{background:var(--raised); color:var(--text)}
+button:focus-visible{outline:2px solid var(--sand); outline-offset:2px}
+button.on{background:var(--sand); color:var(--ink)}
+kbd{font-family:var(--mono); font-size:9px; opacity:.6; padding:0 3px}
 .formula{margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--faint)}
-
 @media (max-width:1080px){
   main{grid-template-columns:1fr; grid-template-rows:minmax(220px,1fr) auto}
   aside{overflow:visible}
@@ -169,7 +143,7 @@ kbd{
   </div>
 
   <aside>
-    <div class="card tight status s-settling" id="statusCard">
+    <div class="status s-settling" id="statusCard">
       <span class="beacon"></span>
       <div>
         <h2 id="verdict">Acquiring</h2>
@@ -177,40 +151,53 @@ kbd{
       </div>
     </div>
 
-    <div class="card readout">
+    <div class="hero">
       <div class="top">
         <span class="lbl">Depth&nbsp;Z</span>
-        <span class="lbl" id="modeTag">smoothed</span>
+        <span class="mode" id="modeTag">smoothed</span>
       </div>
-      <div class="big"><span class="num" id="depth">—</span><span class="unit">cm</span></div>
-      <div class="tol" id="tol">±&nbsp;— cm (1σ)</div>
+      <div class="big"><span class="num" id="depth">&mdash;</span><span class="unit">cm</span></div>
+      <div class="tol" id="tol">&plusmn; &mdash; cm (1&sigma;)</div>
       <div class="versus">
         <span class="k">Spec baseline&nbsp;fW/w</span>
-        <span><span class="v num" id="baseVal">—</span>
-              <span class="d num" id="delta"></span></span>
+        <span><span class="v num" id="baseVal">&mdash;</span><span class="d num" id="delta"></span></span>
       </div>
     </div>
 
-    <div class="card bearing">
-      <canvas id="gauge" width="104" height="72"></canvas>
-      <div class="vals">
-        <div class="lbl" style="margin-bottom:6px">Deviation&nbsp;θ</div>
-        <div><span class="theta num" id="theta">—</span><span class="side" id="side"></span></div>
-        <div class="sub">φ <span id="phi">—</span>°&nbsp;&nbsp;·&nbsp;&nbsp;±<span id="sigTheta">—</span>°</div>
+    <div class="duo">
+      <div class="card">
+        <span class="lbl">Deviation&nbsp;&theta;</span>
+        <div class="gaugewrap"><canvas id="gauge" width="112" height="62"></canvas></div>
+        <div class="theta num" id="theta">&mdash;</div>
+        <span class="side" id="side">&mdash;</span>
+        <div class="sub">&phi; <span id="phi">&mdash;</span>&deg; &nbsp;&plusmn;<span id="sigTheta">&mdash;</span>&deg;</div>
+      </div>
+      <div class="card">
+        <span class="lbl">Quality</span>
+        <div class="ringwrap">
+          <svg width="112" height="112" viewBox="0 0 112 112">
+            <circle cx="56" cy="56" r="45" fill="none" stroke="#48426D" stroke-width="9"/>
+            <circle id="qRing" cx="56" cy="56" r="45" fill="none" stroke="#F0C38E"
+                    stroke-width="9" stroke-linecap="round"
+                    stroke-dasharray="283" stroke-dashoffset="283"
+                    transform="rotate(-90 56 56)"
+                    style="transition:stroke-dashoffset .3s ease, stroke .3s ease"/>
+          </svg>
+          <div class="mid">
+            <span class="pct num" id="qPct">&mdash;</span>
+            <span class="cap">confidence</span>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="card">
-      <div class="qhead">
-        <span class="lbl">Measurement quality</span>
-        <span class="qpct" id="qPct">—</span>
-      </div>
-      <div class="bar"><i id="qBar" style="width:0%"></i></div>
+      <span class="lbl" style="display:block; margin-bottom:12px">Diagnostics</span>
       <div class="subs">
-        <div class="sub-row"><span>Fit</span><b id="qDet">—</b></div>
-        <div class="sub-row"><span>Cue match</span><b id="qCue">—</b></div>
-        <div class="sub-row"><span>Stability</span><b id="qSta">—</b></div>
-        <div class="sub-row"><span>Pose</span><b id="qPos">—</b></div>
+        <div class="sub-row"><span>Fit</span><b id="qDet">&mdash;</b></div>
+        <div class="sub-row"><span>Cue match</span><b id="qCue">&mdash;</b></div>
+        <div class="sub-row"><span>Stability</span><b id="qSta">&mdash;</b></div>
+        <div class="sub-row"><span>Pose</span><b id="qPos">&mdash;</b></div>
       </div>
       <div class="hints" id="hints"></div>
     </div>
@@ -219,18 +206,21 @@ kbd{
       <div class="chart-head">
         <span class="lbl">Range history</span>
         <div class="legend">
-          <span><i style="background:#7FD4C1"></i>ours</span>
-          <span><i style="background:#6B7A99"></i>baseline</span>
+          <span><i style="background:#F0C38E"></i>ours</span>
+          <span><i style="background:#8981AE"></i>baseline</span>
         </div>
       </div>
-      <canvas class="trace" id="trace" width="640" height="208"></canvas>
+      <canvas class="trace" id="trace" width="640" height="192"></canvas>
     </div>
 
-    <div class="card tight">
-      <div class="lbl" style="margin-bottom:7px">Spec inputs</div>
-      <div class="sub" style="margin:0; line-height:1.7; color:var(--muted)">
-        x=<span id="ix">—</span>px &nbsp; w_px=<span id="iw">—</span>px<br>
-        f=<span id="if">—</span>px &nbsp; c_x=<span id="ic">—</span>px &nbsp; W=<span id="iW">—</span>m
+    <div class="card spec">
+      <span class="lbl">Spec inputs</span>
+      <div class="grid">
+        <span>x <b id="ix">&mdash;</b> px</span>
+        <span>w_px <b id="iw">&mdash;</b> px</span>
+        <span>f <b id="if">&mdash;</b> px</span>
+        <span>c_x <b id="ic">&mdash;</b> px</span>
+        <span>W <b id="iW">&mdash;</b> m</span>
       </div>
     </div>
   </aside>
@@ -247,7 +237,9 @@ kbd{
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-const fmt = (v, d = 1) => (v == null || !isFinite(v)) ? "—" : v.toFixed(d);
+const fmt = (v, d = 1) => (v == null || !isFinite(v)) ? "\u2014" : v.toFixed(d);
+const SAND="#F0C38E", CORAL="#F1AA9B", CORAL_D="#E4867A", LAV="#8981AE",
+      RULE="#453F6B", FAINT="#8981AE";
 
 /* ── bearing gauge ────────────────────────────────────────────────────
    θ is an angle, so it is drawn as one. A number alone makes the viewer
@@ -255,19 +247,19 @@ const fmt = (v, d = 1) => (v == null || !isFinite(v)) ? "—" : v.toFixed(d);
 function drawGauge(theta) {
   const c = $("gauge"), g = c.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
-  if (c.width !== 104 * dpr) { c.width = 104 * dpr; c.height = 72 * dpr;
-    c.style.width = "104px"; c.style.height = "72px"; }
+  if (c.width !== 112 * dpr) { c.width = 112 * dpr; c.height = 62 * dpr;
+    c.style.width = "112px"; c.style.height = "62px"; }
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, 104, 72);
+  g.clearRect(0, 0, 112, 62);
 
-  const cx = 52, cy = 62, R = 44, SPAN = Math.PI / 4;   // ±45° shown
-  g.lineWidth = 6; g.lineCap = "round";
-  g.strokeStyle = "#232B3A";
+  const cx = 56, cy = 54, R = 40, SPAN = Math.PI / 4;   // ±45° shown
+  g.lineWidth = 7; g.lineCap = "round";
+  g.strokeStyle = "#48426D";
   g.beginPath(); g.arc(cx, cy, R, -Math.PI / 2 - SPAN, -Math.PI / 2 + SPAN); g.stroke();
 
   for (let t = -40; t <= 40; t += 20) {           // tick marks every 20°
     const a = -Math.PI / 2 + (t / 45) * SPAN;
-    g.strokeStyle = t === 0 ? "#5A667E" : "#2C3547"; g.lineWidth = t === 0 ? 1.5 : 1;
+    g.strokeStyle = t === 0 ? FAINT : "#544D7D"; g.lineWidth = t === 0 ? 1.5 : 1;
     g.beginPath();
     g.moveTo(cx + Math.cos(a) * (R - 10), cy + Math.sin(a) * (R - 10));
     g.lineTo(cx + Math.cos(a) * (R - 4), cy + Math.sin(a) * (R - 4));
@@ -277,12 +269,12 @@ function drawGauge(theta) {
 
   const cl = Math.max(-45, Math.min(45, theta));
   const a = -Math.PI / 2 + (cl / 45) * SPAN;
-  g.strokeStyle = "#7FD4C1"; g.lineWidth = 6;
+  g.strokeStyle = SAND; g.lineWidth = 7;
   g.beginPath(); g.arc(cx, cy, R, -Math.PI / 2, a, cl < 0); g.stroke();
-  g.strokeStyle = "#7FD4C1"; g.lineWidth = 2;
+  g.strokeStyle = SAND; g.lineWidth = 2;
   g.beginPath(); g.moveTo(cx, cy);
   g.lineTo(cx + Math.cos(a) * (R - 12), cy + Math.sin(a) * (R - 12)); g.stroke();
-  g.fillStyle = "#7FD4C1";
+  g.fillStyle = SAND;
   g.beginPath(); g.arc(cx, cy, 3, 0, 7); g.fill();
 }
 
@@ -293,14 +285,14 @@ function drawGauge(theta) {
 function drawTrace(ours, base, sigma) {
   const c = $("trace"), g = c.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
-  const W = c.clientWidth || 320, H = 104;
+  const W = c.clientWidth || 320, H = 96;
   if (c.width !== W * dpr) { c.width = W * dpr; c.height = H * dpr; }
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
 
   const pts = ours.filter(v => v != null && isFinite(v));
   if (pts.length < 2) {
-    g.fillStyle = "#5A667E"; g.font = "11px ui-monospace,monospace";
+    g.fillStyle = FAINT; g.font = "11px ui-monospace,monospace";
     g.fillText("awaiting data", 8, H / 2); return;
   }
   const all = pts.concat(base.filter(v => v != null && isFinite(v)));
@@ -309,14 +301,14 @@ function drawTrace(ours, base, sigma) {
   const X = i => (i / (ours.length - 1)) * (W - 4) + 2;
   const Y = v => H - 14 - ((v - lo) / (hi - lo)) * (H - 26);
 
-  g.strokeStyle = "#1A202C"; g.lineWidth = 1;          // gridlines
+  g.strokeStyle = RULE; g.lineWidth = 1;          // gridlines
   for (let k = 0; k <= 2; k++) {
     const y = 6 + k * ((H - 20) / 2);
     g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
   }
 
   // ±1σ band around our estimate
-  g.fillStyle = "rgba(127,212,193,.13)"; g.beginPath();
+  g.fillStyle = "rgba(240,195,142,.15)"; g.beginPath();
   let started = false;
   ours.forEach((v, i) => { if (v == null || !isFinite(v)) return;
     const s = sigma[i] || 0; const y = Y(v + s);
@@ -334,10 +326,10 @@ function drawTrace(ours, base, sigma) {
       on ? g.lineTo(X(i), Y(v)) : (g.moveTo(X(i), Y(v)), on = true); });
     g.stroke(); g.setLineDash([]);
   };
-  line(base, "#6B7A99", 1.4, [3, 3]);
-  line(ours, "#7FD4C1", 2, null);
+  line(base, LAV, 1.4, [3, 3]);
+  line(ours, SAND, 2.2, null);
 
-  g.fillStyle = "#5A667E"; g.font = "9px ui-monospace,monospace";
+  g.fillStyle = FAINT; g.font = "9px ui-monospace,monospace";
   g.fillText(hi.toFixed(0) + " cm", 3, 9);
   g.fillText(lo.toFixed(0) + " cm", 3, H - 3);
 }
@@ -351,8 +343,7 @@ async function tick() {
 
     const chip = $("calibChip");
     chip.className = "chip " + (s.calibrated ? "good" : "warn");
-    $("calibText").textContent = s.calibrated
-      ? "Calibrated" : "Uncalibrated · scale ±20%";
+    $("calibText").textContent = s.calibrated ? "Calibrated" : "Uncalibrated \u00b7 \u00b120%";
 
     if (s.intrinsics) {
       $("if").textContent = fmt(s.intrinsics.fx, 1);
@@ -366,13 +357,13 @@ async function tick() {
 
     const f = (s.faces || [])[0];
     $("stageMsg").textContent = f ? "" : (s.message || "");
-    $("stageMsg").style.color = s.fatal ? "#FF6B5A" : "#5A667E";
+    $("stageMsg").style.color = s.fatal ? CORAL_D : FAINT;
     $("stageMsg").style.maxWidth = "70%";
     $("stageMsg").style.textAlign = "center";
     $("stageMsg").style.lineHeight = "1.6";
 
     if (s.fatal) {
-      $("statusCard").className = "card tight status s-low";
+      $("statusCard").className = "status s-low";
       $("verdict").textContent = "Camera unavailable";
       $("verdictDetail").textContent = s.message || "";
       $("depth").textContent = "—"; $("theta").textContent = "—";
@@ -380,15 +371,14 @@ async function tick() {
     }
 
     if (!f) {
-      const card = $("statusCard");
-      card.className = "card tight status s-settling";
+      $("statusCard").className = "status s-settling";
       $("verdict").textContent = "No face";
       $("verdictDetail").textContent = s.message || "Step into frame";
     } else {
       const q = f.quality || {};
       const cls = q.verdict === "stable" ? "s-stable"
                 : q.verdict === "low-confidence" ? "s-low" : "s-settling";
-      $("statusCard").className = "card tight status " + cls;
+      $("statusCard").className = "status " + cls;
       $("verdict").textContent = q.verdict === "stable" ? "Stable"
                                : q.verdict === "low-confidence" ? "Low confidence"
                                : "Settling";
@@ -405,17 +395,18 @@ async function tick() {
       const sd = $("side");
       sd.textContent = Math.abs(f.theta_deg) < 0.6 ? "CENTRED"
                      : (f.theta_deg > 0 ? "RIGHT" : "LEFT");
-      sd.style.color = Math.abs(f.theta_deg) < 0.6 ? "#5A667E" : "#7FD4C1";
       $("phi").textContent = fmt(f.phi_deg, 1);
       $("sigTheta").textContent = fmt(f.sigma_theta_deg, 2);
       drawGauge(f.theta_deg);
 
       const pct = q.overall != null ? q.overall : 0;
       $("qPct").textContent = fmt(pct, 0) + "%";
-      const bar = $("qBar");
-      bar.style.width = Math.max(0, Math.min(100, pct)) + "%";
-      bar.style.background = pct >= 70 ? "#7FD4C1" : pct >= 45 ? "#E8A33D" : "#FF6B5A";
-      $("qPct").style.color = pct >= 70 ? "#7FD4C1" : pct >= 45 ? "#E8A33D" : "#FF6B5A";
+      const col = pct >= 70 ? SAND : pct >= 45 ? CORAL : CORAL_D;
+      $("qPct").style.color = col;
+      const ring = $("qRing");
+      ring.setAttribute("stroke", col);
+      ring.setAttribute("stroke-dashoffset",
+        String(283 - 283 * Math.max(0, Math.min(100, pct)) / 100));
       const P = v => v == null ? "—" : fmt(v, 0) + "%";
       $("qDet").textContent = P(q.detection);
       $("qCue").textContent = P(q.cue_match);

@@ -18,11 +18,11 @@ import cv2
 import numpy as np
 
 # BGR, matched to the web palette.
-PHOS = (193, 212, 127)      # measurement teal
-SLATE = (153, 122, 107)     # baseline trace, deliberately dull
-AMBER = (61, 163, 232)
-HOT = (90, 107, 255)
-RULE = (58, 43, 35)
+PHOS = (142, 195, 240)      # apricot #F0C38E in BGR
+SLATE = (174, 129, 137)     # lavender, baseline: deliberately dull
+AMBER = (155, 170, 241)   # coral #F1AA9B in BGR
+HOT = (122, 134, 228)     # deep coral
+RULE = (107, 77, 84)
 WHITE = (235, 235, 235)
 DIM = (140, 140, 140)
 
