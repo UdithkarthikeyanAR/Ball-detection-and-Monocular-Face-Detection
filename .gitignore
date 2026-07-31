@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# YOLO outputs
+ball-detection/runs/
+
+# Dataset
+ball-detection/dataset/images/
+ball-detection/dataset/labels/
+
+# VS Code
+.vscode/
