@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BallVision AI</title>
+<style>
+:root{
+  --ink:#2A2547; --bg:#312C51; --panel:#3B3560; --raised:#48426D;
+  --border:#544D7D; --border-soft:#453F6B;
+  --sand:#F0C38E; --sand-wash:rgba(240,195,142,.12);
+  --coral:#F1AA9B; --coral-deep:#E4867A;
+  --text:#F2EFF9; --muted:#B0A8CE; --faint:#8981AE;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:Inter,ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+  --r:18px; --r-sm:13px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--ink); color:var(--text); font-family:var(--sans);
+  font-size:13px; -webkit-font-smoothing:antialiased; letter-spacing:-.005em;
+  display:flex; flex-direction:column; overflow:hidden}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:-.025em}
+.lbl{font-size:10.5px; color:var(--faint); font-weight:600; letter-spacing:.04em; text-transform:uppercase}
+
+/* header */
+header{display:flex; align-items:center; gap:14px; padding:12px 18px; flex:none}
+.wordmark{font-size:15px; font-weight:700; letter-spacing:-.02em}
+.wordmark span{color:var(--sand)}
+.tagline{color:var(--faint); font-size:11.5px; margin-top:1px}
+.spacer{flex:1}
+.chip{font-size:11px; padding:6px 12px; border-radius:999px; color:var(--muted);
+      background:var(--panel); display:flex; gap:7px; align-items:center; font-weight:500}
+.chip.ok{color:var(--ink); background:var(--sand); font-weight:600}
+.chip.err{color:var(--ink); background:var(--coral); font-weight:600}
+.dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* layout */
+main{flex:1; display:grid; grid-template-columns:1fr 360px; gap:12px;
+     padding:0 18px 12px; min-height:0}
+.stage{position:relative; background:#000; border-radius:var(--r); overflow:hidden;
+       display:flex; align-items:center; justify-content:center; min-height:0}
+.stage img{width:100%; height:100%; object-fit:contain; display:block}
+.stage .empty{position:absolute; color:var(--faint); font-family:var(--mono);
+              font-size:12px; text-align:center; max-width:70%; line-height:1.6}
+aside{display:flex; flex-direction:column; gap:11px; overflow-y:auto; min-height:0; padding-right:2px}
+aside::-webkit-scrollbar{width:6px}
+aside::-webkit-scrollbar-thumb{background:var(--raised); border-radius:3px}
+.card{background:var(--panel); border-radius:var(--r); padding:15px 16px}
+
+/* status */
+.status{display:flex; gap:10px; align-items:center; padding:11px 16px;
+        background:var(--panel); border-radius:999px}
+.status .beacon{width:8px;height:8px;border-radius:50%;flex:none}
+.status h2{margin:0; font-size:13px; font-weight:650; letter-spacing:-.01em}
+.status p{margin:0; font-size:11px; color:var(--faint); line-height:1.3}
+.s-ok   .beacon{background:var(--sand)}    .s-ok h2{color:var(--sand)}
+.s-none .beacon{background:var(--coral)}   .s-none h2{color:var(--coral)}
+.s-err  .beacon{background:var(--coral-deep)} .s-err h2{color:var(--coral-deep)}
+
+/* hero */
+.hero{background:var(--sand); color:var(--ink); border-radius:var(--r); padding:17px 18px 15px}
+.hero .top{display:flex; justify-content:space-between; align-items:center}
+.hero .lbl{color:rgba(42,37,71,.62)}
+.hero .tag{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+           color:rgba(42,37,71,.55)}
+.big{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:60px;
+     font-weight:700; line-height:1; letter-spacing:-.06em; margin-top:6px}
+.big .unit{font-size:14px; font-weight:600; margin-left:4px; letter-spacing:0;
+           color:rgba(42,37,71,.55)}
+.classes{margin-top:10px; display:flex; flex-wrap:wrap; gap:6px}
+.cls-tag{font-size:11px; padding:4px 10px; border-radius:999px;
+         background:rgba(42,37,71,.13); color:rgba(42,37,71,.8); font-weight:600}
+
+/* duo */
+.duo{display:grid; grid-template-columns:1fr 1fr; gap:11px}
+.duo .card{padding:14px; display:flex; flex-direction:column; align-items:flex-start}
+
+/* confidence card */
+.conf-num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:28px;
+          font-weight:700; line-height:1; letter-spacing:-.04em; color:var(--sand); margin-top:8px}
+.conf-bar{width:100%; height:5px; background:var(--raised); border-radius:3px;
+          overflow:hidden; margin-top:10px}
+.conf-bar i{display:block; height:100%; background:var(--sand); border-radius:3px;
+            transition:width .25s ease, background .25s ease}
+
+/* ring */
+.ringwrap{position:relative; align-self:center; margin-top:4px}
+.ringwrap .mid{position:absolute; inset:0; display:flex; flex-direction:column;
+               align-items:center; justify-content:center}
+.ringwrap .rnum{font-family:var(--mono); font-size:18px; font-weight:700; letter-spacing:-.03em}
+.ringwrap .rcap{font-size:8.5px; color:var(--faint); text-transform:uppercase;
+                letter-spacing:.07em; margin-top:1px}
+
+/* stats grid */
+.stats{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px}
+.stat-row{display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted)}
+.stat-row b{font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums; color:var(--text)}
+
+/* chart */
+.chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:11px}
+.legend{display:flex; gap:12px; font-size:10.5px; color:var(--faint)}
+.legend i{display:inline-block; width:13px; height:2.5px; margin-right:5px;
+          vertical-align:middle; border-radius:2px}
+canvas.trace{width:100%; height:96px; display:block}
+
+/* footer */
+footer{flex:none; display:flex; gap:8px; align-items:center; padding:0 18px 14px; flex-wrap:wrap}
+button{font-family:var(--sans); font-size:11.5px; font-weight:600; color:var(--muted);
+       background:var(--panel); border:0; border-radius:999px; padding:9px 15px;
+       cursor:pointer; display:flex; gap:8px; align-items:center;
+       transition:background .14s, color .14s}
+button:hover{background:var(--raised); color:var(--text)}
+button:focus-visible{outline:2px solid var(--sand); outline-offset:2px}
+kbd{font-family:var(--mono); font-size:9px; opacity:.6; padding:0 3px}
+.formula{margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--faint)}
+
+@media(max-width:1080px){
+  main{grid-template-columns:1fr; grid-template-rows:minmax(220px,1fr) auto}
+  aside{overflow:visible}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="wordmark">ball<span>vision</span></div>
+    <div class="tagline">YOLO ball detection · real-time</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="chip" id="statusChip"><span class="dot"></span><span id="chipText">connecting</span></div>
+  <div class="chip"><span class="num" id="fps">—</span>&nbsp;FPS</div>
+</header>
+
+<main>
+  <div class="stage">
+    <img id="video" src="/video.mjpg" alt="Annotated camera feed">
+    <div class="empty" id="stageMsg"></div>
+  </div>
+
+  <aside>
+    <!-- status -->
+    <div class="status s-none" id="statusCard">
+      <span class="beacon"></span>
+      <div>
+        <h2 id="verdict">Connecting</h2>
+        <p id="verdictDetail">Starting camera…</p>
+      </div>
+    </div>
+
+    <!-- hero: ball count -->
+    <div class="hero">
+      <div class="top">
+        <span class="lbl">Balls detected</span>
+        <span class="tag" id="heroTag">live</span>
+      </div>
+      <div class="big"><span class="num" id="count">—</span><span class="unit">balls</span></div>
+      <div class="classes" id="classes"></div>
+    </div>
+
+    <!-- duo: confidence + FPS ring -->
+    <div class="duo">
+      <div class="card">
+        <span class="lbl">Confidence</span>
+        <div class="conf-num num" id="conf">—</div>
+        <div style="font-size:11px;color:var(--faint);margin-top:4px;font-family:var(--mono)">
+          highest detection
+        </div>
+        <div class="conf-bar"><i id="confBar" style="width:0%"></i></div>
+      </div>
+
+      <div class="card">
+        <span class="lbl">Throughput</span>
+        <div class="ringwrap">
+          <svg width="104" height="104" viewBox="0 0 104 104">
+            <circle cx="52" cy="52" r="42" fill="none" stroke="#48426D" stroke-width="8"/>
+            <circle id="fpsRing" cx="52" cy="52" r="42" fill="none" stroke="#F0C38E"
+                    stroke-width="8" stroke-linecap="round"
+                    stroke-dasharray="264" stroke-dashoffset="264"
+                    transform="rotate(-90 52 52)"
+                    style="transition:stroke-dashoffset .3s ease"/>
+          </svg>
+          <div class="mid">
+            <span class="rnum num" id="fpsRingNum">—</span>
+            <span class="rcap">fps</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- stats -->
+    <div class="card">
+      <span class="lbl" style="display:block;margin-bottom:12px">Detection stats</span>
+      <div class="stats">
+        <div class="stat-row"><span>Total seen</span><b id="totalSeen">0</b></div>
+        <div class="stat-row"><span>Peak count</span><b id="peakCount">0</b></div>
+        <div class="stat-row"><span>Avg conf</span><b id="avgConf">—</b></div>
+        <div class="stat-row"><span>Avg FPS</span><b id="avgFps">—</b></div>
+      </div>
+    </div>
+
+    <!-- chart -->
+    <div class="card">
+      <div class="chart-head">
+        <span class="lbl">History</span>
+        <div class="legend">
+          <span><i style="background:#F0C38E"></i>count</span>
+          <span><i style="background:#8981AE"></i>confidence</span>
+        </div>
+      </div>
+      <canvas class="trace" id="trace" width="640" height="192"></canvas>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <button id="btnShot">Screenshot <kbd>S</kbd></button>
+  <button id="btnFull">Fullscreen <kbd>F</kbd></button>
+  <span class="formula">model: YOLO &nbsp;·&nbsp; conf threshold: 0.35</span>
+</footer>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const fmt = (v, d=1) => (v==null||!isFinite(v)) ? "—" : (+v).toFixed(d);
+const SAND="#F0C38E", LAV="#8981AE", CORAL="#F1AA9B", FAINT="#8981AE", RULE="#453F6B";
+
+// running stats
+let totalSeen=0, peakCount=0, confSamples=[], fpsSamples=[];
+
+function drawTrace(counts, confs) {
+  const c=$("trace"), g=c.getContext("2d");
+  const dpr=window.devicePixelRatio||1;
+  const W=c.clientWidth||320, H=96;
+  if(c.width!==W*dpr){c.width=W*dpr;c.height=H*dpr;}
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,W,H);
+  if(counts.length<2){
+    g.fillStyle=FAINT;g.font="11px ui-monospace,monospace";
+    g.fillText("awaiting data",6,H/2);return;
+  }
+  const cMax=Math.max(...counts,1);
+  const X=i=>(i/(counts.length-1))*(W-4)+2;
+  const Yc=v=>H-10-((v/cMax)*(H-20));
+  const Yk=v=>H-10-((v/100)*(H-20));
+
+  g.strokeStyle=RULE;g.lineWidth=1;
+  for(let k=0;k<=2;k++){const y=6+k*((H-19)/2);g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke();}
+
+  const line=(arr,yfn,col,w,dash)=>{
+    g.strokeStyle=col;g.lineWidth=w;g.setLineDash(dash||[]);
+    g.beginPath();let on=false;
+    arr.forEach((v,i)=>{isFinite(v)?on?g.lineTo(X(i),yfn(v)):(g.moveTo(X(i),yfn(v)),on=true):(on=false)});
+    g.stroke();g.setLineDash([]);
+  };
+  line(confs,Yk,LAV,1.4,[3,3]);
+  line(counts,Yc,SAND,2.2);
+}
+
+async function tick(){
+  try{
+    const s=await(await fetch("/api/state",{cache:"no-store"})).json();
+    $("fps").textContent=fmt(s.fps,1);
+
+    const chip=$("statusChip");
+    if(s.ok&&s.count>0){chip.className="chip ok";}
+    else if(s.ok){chip.className="chip";}
+    else{chip.className="chip err";}
+    $("chipText").textContent=s.ok?"Live":"Error";
+
+    if(!s.ok){
+      $("statusCard").className="status s-err";
+      $("verdict").textContent="Camera error";
+      $("verdictDetail").textContent=s.message||"";
+      $("stageMsg").textContent=s.message||"";
+      return;
+    }
+
+    $("stageMsg").textContent=s.count>0?"":"no ball detected";
+
+    if(s.count>0){
+      $("statusCard").className="status s-ok";
+      $("verdict").textContent=s.count===1?"1 ball detected":`${s.count} balls detected`;
+      $("verdictDetail").textContent=(s.labels||[]).join(", ")||"";
+    } else {
+      $("statusCard").className="status s-none";
+      $("verdict").textContent="No ball";
+      $("verdictDetail").textContent="Hold a ball in view";
+    }
+
+    $("count").textContent=String(s.count);
+    $("conf").textContent=s.count>0?fmt(s.confidence,1)+"%":"—";
+    const bar=$("confBar");
+    bar.style.width=Math.min(s.confidence,100)+"%";
+    bar.style.background=s.confidence>=70?SAND:s.confidence>=40?CORAL:"#E4867A";
+
+    // classes pills
+    $("classes").innerHTML=(s.labels||[])
+      .map(l=>`<span class="cls-tag">${l}</span>`).join("");
+
+    // fps ring (max 30 fps shown)
+    const fr=$("fpsRing");
+    const fp=Math.min(s.fps/30,1);
+    fr.setAttribute("stroke-dashoffset",String(264-264*fp));
+    $("fpsRingNum").textContent=fmt(s.fps,0);
+
+    // running stats
+    if(s.count>0){
+      totalSeen+=s.count; peakCount=Math.max(peakCount,s.count);
+      if(s.confidence>0) confSamples.push(s.confidence);
+    }
+    if(s.fps>0) fpsSamples.push(s.fps);
+    if(confSamples.length>200) confSamples.shift();
+    if(fpsSamples.length>200)  fpsSamples.shift();
+
+    $("totalSeen").textContent=String(totalSeen);
+    $("peakCount").textContent=String(peakCount);
+    $("avgConf").textContent=confSamples.length
+      ? fmt(confSamples.reduce((a,b)=>a+b,0)/confSamples.length,1)+"%":"—";
+    $("avgFps").textContent=fpsSamples.length
+      ? fmt(fpsSamples.reduce((a,b)=>a+b,0)/fpsSamples.length,1):"—";
+
+    if(s.history) drawTrace(s.history.count, s.history.conf);
+  }catch(e){/* server restarting */}
+}
+setInterval(tick,80);tick();
+
+$("btnFull").onclick=()=>document.fullscreenElement
+  ?document.exitFullscreen():document.documentElement.requestFullscreen();
+$("btnShot").onclick=()=>{
+  const img=$("video"),c=document.createElement("canvas");
+  c.width=img.naturalWidth||img.width;c.height=img.naturalHeight||img.height;
+  c.getContext("2d").drawImage(img,0,0);
+  const a=document.createElement("a");
+  a.download=`ballvision-${Date.now()}.png`;a.href=c.toDataURL("image/png");a.click();
+};
+addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT")return;
+  if(e.key.toLowerCase()==="f")$("btnFull").click();
+  if(e.key.toLowerCase()==="s")$("btnShot").click();
+});
+addEventListener("resize",()=>drawTrace([],[]));
+</script>
+</body>
+</html>
